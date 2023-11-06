@@ -34,11 +34,12 @@ float oldValueZ = 0.0;
 
 unsigned long startTime;
 
-const char* mqtt_server = "test.mosquitto.org";
-const char* mqttClientId = "ESP32Client";
+// Replace your MQTT Broker IP address here:
+const char* mqtt_server = "192.168.99.113";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+
 long lastMsg = 0;
 char msg[50];
 int value = 0;
@@ -46,13 +47,13 @@ int value = 0;
 void setup() {
   Wire.begin();
   //Wire.setClock(100000);
-         // join i2c bus (address optional for master)
+
   Serial.begin(115200);  // start serial for output
-  delay(500);
+  
   setup_wifi();
-  delay(2000);
 
   client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
   detectIMU();
   scan();
   enableIMU();
@@ -79,19 +80,69 @@ void setup_wifi() {
   Serial.println(WiFi.localIP());
 }
 
+void connect_mqttServer() {
+  // Loop until we're reconnected
+  while (!client.connected()) {
+
+        //first check if connected to wifi
+        if(WiFi.status() != WL_CONNECTED){
+          //if not connected, then first connect to wifi
+          setup_wifi();
+        }
+
+        //now attemt to connect to MQTT server
+        Serial.print("Attempting MQTT connection...");
+        // Attempt to connect
+        if (client.connect("ESP32_client")) { // Change the name of client here if multiple ESP32 are connected
+          //attempt successful
+          Serial.println("connected");
+          // Subscribe to topics here
+          client.subscribe("rpi/broadcast");
+          //client.subscribe("rpi/xyz"); //subscribe more topics here
+          
+        } 
+        else {
+          //attempt not successful
+          Serial.print("failed, rc=");
+          Serial.print(client.state());
+          Serial.println(" trying again in 2 seconds");
+
+          delay(2000);
+        }
+  }
+  
+}
+
+//this function will be executed whenever there is data available on subscribed topics
+void callback(char* topic, byte* message, unsigned int length) {
+  Serial.print("Message arrived on topic: ");
+  Serial.print(topic);
+  Serial.print(". Message: ");
+  String messageTemp;
+  
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)message[i]);
+    messageTemp += (char)message[i];
+  }
+  Serial.println();
+
+  // Check if a message is received on the topic "rpi/broadcast"
+  if (String(topic) == "rpi/broadcast") {
+      if(messageTemp == "10"){
+        Serial.println("Action: blink LED");
+      }
+  }
+
+  //Similarly add more if statements to check for other subscribed topics 
+}
+
 
 void loop() {
   if (!client.connected()) {
-    if (client.connect(mqttClientId)) {
-      Serial.println("Connected to MQTT broker");
-    } else {
-      Serial.print(client.state());
-      Serial.println("Connection failed. Retrying...");
-      delay(2000);
-      return;
-    }
+    connect_mqttServer();
   }
- startTime = millis();
+
+  long now = millis();
   //We only care about accell values for now, the IMU gyro calcs are trash
   //Read the measurements from  sensors
   readACC(buff);
@@ -135,17 +186,10 @@ void loop() {
   Serial.print(AccYangle);
 
   String imuData = String(AccXangle) + "," + String(AccYangle);
-  if (client.connected()) {
-    Serial.print("Hello");
-    client.publish("esp32/IMU", imuData.c_str(), false);
+  if (now - lastMsg > 100) {
+    lastMsg = now;
+    client.publish("esp32/sensor1", imuData.c_str()); //topic name (to which this ESP32 publishes its data). 88 is the dummy value.
+    
   }
-  //Each loop should be at least 20ms.
-  while(millis() - startTime < (DT*1000))
-        {
-            delay(1);
-        }
-  Serial.println( millis()- startTime);
- 
-
 
 }
