@@ -2,6 +2,7 @@ import cv2
 import mediapipe as mp
 import time
 import numpy as np
+from collections import Counter
 
 mpPose = mp.solutions.pose
 pose = mpPose.Pose()
@@ -16,7 +17,22 @@ prev_joint_positions = []
 # Smoothing factor (adjust as needed)
 smoothing_factor = 0.5
 
+# Initialize a list to store bruh values during calibration
+calibration_bruh_values = []
+
+# Calibration period (in seconds)
+calibration_period = 5  # Adjust as needed
+
+calibration_start_time = time.time()
+
+reps = 0
+
+cooldown_period = 3  # Cooldown period in seconds
+cooldown_start_time = time.time()
+
 while True:
+    bruh = 0
+    
     success, img = cap.read()
     # rgb for skeleton
     imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -41,7 +57,7 @@ while True:
         current_joint_positions = []
 
         if results.pose_landmarks:
-            mpDraw.draw_landmarks(img, results.pose_landmarks, mpPose.POSE_CONNECTIONS)
+            #mpDraw.draw_landmarks(img, results.pose_landmarks, mpPose.POSE_CONNECTIONS)
             for id, lm in enumerate(results.pose_landmarks.landmark):
                 h, w, c = img.shape
                 print(id, lm)
@@ -57,15 +73,34 @@ while True:
                 # Store the current smoothed joint positions
                 current_joint_positions.append((smoothed_cx, smoothed_cy))
 
-                # Check if the joint is within the bounding box
                 if x_box < smoothed_cx < x_box + w_box and y_box < smoothed_cy < y_box + h_box:
-                    # Draw a circle on the smoothed joint within the bounding box in red
-                    cv2.circle(img, (smoothed_cx, smoothed_cy), 5, (0, 0, 255), cv2.FILLED)
+                # Draw a circle on the smoothed joint within the bounding box in green
+                    cv2.circle(img, (smoothed_cx, smoothed_cy), 5, (0, 255, 0), cv2.FILLED)
                 else:
-                    cv2.circle(img, (smoothed_cx, smoothed_cy), 5, (255, 0, 0), cv2.FILLED)
+                    # Draw a circle on the smoothed joint outside the bounding box in red
+                    cv2.circle(img, (smoothed_cx, smoothed_cy), 5, (0, 0, 255), cv2.FILLED)
+                if  smoothed_cy < y_box:
+                    bruh += 1
+                    
 
         # Update previous joint positions for the next frame
         prev_joint_positions = current_joint_positions
+
+        ## Calibration section: As of rn its used only for rep counter
+        
+        # Check if the calibration period is over
+        if time.time() - calibration_start_time < calibration_period:
+            # During calibration, store bruh values
+            calibration_bruh_values.append(bruh)
+        else:
+            # After calibration, find the most common bruh value
+            most_common_bruh = Counter(calibration_bruh_values).most_common(1)[0][0]
+            print(f"Most common bruh value during calibration: {most_common_bruh}")
+            if time.time() - cooldown_start_time > cooldown_period:
+                if bruh > most_common_bruh:
+                    reps += 1
+                    cooldown_start_time = time.time()
+
 
     except Exception as e:
         print("Error:", e)
@@ -75,10 +110,9 @@ while True:
     fps = 1 / (cTime - pTime)
     pTime = cTime
 
-    cv2.putText(img, str(int(fps)), (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 3)
+    cv2.putText(img, f"Points above mask: {bruh} Reps: {reps}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 3)
     
     # Display the combined image with transparency
     cv2.imshow("frame", img)
 
     cv2.waitKey(1)
-
