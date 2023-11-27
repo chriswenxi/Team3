@@ -4,36 +4,44 @@ import time
 import numpy as np
 from collections import Counter
 
+# Name functions for skeleton usage
 mpPose = mp.solutions.pose
 pose = mpPose.Pose()
 mpDraw = mp.solutions.drawing_utils
 
+# Get video directly from camera
 cap = cv2.VideoCapture(0)
 pTime = 0
 
 # Initialize empty list to store previous joint positions
 prev_joint_positions = []
 
-# Smoothing factor (adjust as needed)
+# Smoothing factor (adjust as needed) (for skeleton)
 smoothing_factor = 0.5
 
-# Initialize a list to store bruh values during calibration
-calibration_bruh_values = []
+# Initialize a list to store pabove values during calibration
+calibration_pabove_values = []
 
 # Calibration period (in seconds)
 calibration_period = 5  # Adjust as needed
 
 calibration_start_time = time.time()
 
+# Rep counter 
 reps = 0
 
+# Cooldown start values for counting reps
 cooldown_period = 3  # Cooldown period in seconds
 cooldown_start_time = time.time()
 
+# This is your actual processing code
 while True:
-    bruh = 0
+    # Reset pabove for every frame
+    pabove = 0
     
+    # Read frame
     success, img = cap.read()
+
     # rgb for skeleton
     imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     results = pose.process(imgRGB)
@@ -48,6 +56,7 @@ while True:
     masked_img = cv2.bitwise_and(img, img, mask=mask)
 
     try:
+        # Bounding box code for masked item
         contours, hierarchy = cv2.findContours(mask, 1, 2)
         c = max(contours, key=cv2.contourArea)
         x_box, y_box, w_box, h_box = cv2.boundingRect(c)
@@ -57,6 +66,7 @@ while True:
         current_joint_positions = []
 
         if results.pose_landmarks:
+            # Following line is the original skeleton drawing, but we dont really need the connections drawn or the points due to later code
             #mpDraw.draw_landmarks(img, results.pose_landmarks, mpPose.POSE_CONNECTIONS)
             for id, lm in enumerate(results.pose_landmarks.landmark):
                 h, w, c = img.shape
@@ -74,32 +84,40 @@ while True:
                 current_joint_positions.append((smoothed_cx, smoothed_cy))
 
                 if x_box < smoothed_cx < x_box + w_box and y_box < smoothed_cy < y_box + h_box:
-                # Draw a circle on the smoothed joint within the bounding box in green
+                    # Draw a circle on the smoothed joint within the bounding box in green
                     cv2.circle(img, (smoothed_cx, smoothed_cy), 5, (0, 255, 0), cv2.FILLED)
                 else:
                     # Draw a circle on the smoothed joint outside the bounding box in red
                     cv2.circle(img, (smoothed_cx, smoothed_cy), 5, (0, 0, 255), cv2.FILLED)
+                # If a joint is above the y height of the bounding box, count it to pabove
                 if  smoothed_cy < y_box:
-                    bruh += 1
+                    pabove += 1
                     
 
         # Update previous joint positions for the next frame
         prev_joint_positions = current_joint_positions
 
         ## Calibration section: As of rn its used only for rep counter
-        
+
         # Check if the calibration period is over
         if time.time() - calibration_start_time < calibration_period:
-            # During calibration, store bruh values
-            calibration_bruh_values.append(bruh)
+            # During calibration, store pabove values
+            calibration_pabove_values.append(pabove)
+            # Find average position of desired joint (within mask) 
+
+        ## Post Calibration functionality, this will all be done after the cal is over
+
         else:
-            # After calibration, find the most common bruh value
-            most_common_bruh = Counter(calibration_bruh_values).most_common(1)[0][0]
-            print(f"Most common bruh value during calibration: {most_common_bruh}")
+            # After calibration, find the most common pabove value and store it
+            most_common_pabove = Counter(calibration_pabove_values).most_common(1)[0][0]
+            print(f"Most common pabove value during calibration: {most_common_pabove}")
+            # Count reps (currently only allow one rep per cooldown period length)
             if time.time() - cooldown_start_time > cooldown_period:
-                if bruh > most_common_bruh:
+                if pabove > most_common_pabove:
                     reps += 1
                     cooldown_start_time = time.time()
+            # Check for movement
+            # ...
 
 
     except Exception as e:
@@ -110,7 +128,7 @@ while True:
     fps = 1 / (cTime - pTime)
     pTime = cTime
 
-    cv2.putText(img, f"Points above mask: {bruh} Reps: {reps}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 3)
+    cv2.putText(img, f"Points above mask: {pabove} Reps: {reps}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 3)
     
     # Display the combined image with transparency
     cv2.imshow("frame", img)
