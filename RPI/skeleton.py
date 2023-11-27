@@ -10,7 +10,7 @@ pose = mpPose.Pose()
 mpDraw = mp.solutions.drawing_utils
 
 # Get video directly from camera
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
 pTime = 0
 
 # Initialize empty list to store previous joint positions
@@ -30,9 +30,22 @@ calibration_start_time = time.time()
 # Rep counter 
 reps = 0
 
+# Err Counter
+errCounterX = 0
+errCounterY = 0
+
 # Cooldown start values for counting reps
-cooldown_period = 3  # Cooldown period in seconds
+cooldown_period = 3  # Cooldown period (in seconds)
 cooldown_start_time = time.time()
+
+# Init lists to store desired joint positional values during calibration
+calibration_joint_values_x = []
+calibration_joint_values_y = []
+
+# int to store id of desired joint
+desiredJoint = 0
+Joint_x = 0
+Joint_y = 0
 
 # This is your actual processing code
 while True:
@@ -48,7 +61,7 @@ while True:
 
     # hsv masking
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    lower_green = np.array([30, 100, 100])
+    lower_green = np.array([20, 100, 100])
     upper_green = np.array([90, 255, 255])
     mask = cv2.inRange(hsv, lower_green, upper_green)
     
@@ -71,6 +84,7 @@ while True:
             for id, lm in enumerate(results.pose_landmarks.landmark):
                 h, w, c = img.shape
                 print(id, lm)
+                print(f"Image shape: {h} w {w}")
                 cx, cy = int(lm.x * w), int(lm.y * h)
 
                 # Apply smoothing to the joint positions
@@ -86,6 +100,14 @@ while True:
                 if x_box < smoothed_cx < x_box + w_box and y_box < smoothed_cy < y_box + h_box:
                     # Draw a circle on the smoothed joint within the bounding box in green
                     cv2.circle(img, (smoothed_cx, smoothed_cy), 5, (0, 255, 0), cv2.FILLED)
+                    # Store desired joint since we're currently handling the desired joint if we havent alr set an id
+                    if desiredJoint == 0:
+                        desiredJoint = id
+                    # If we are currently handling our desired joint, store the x and y for calibration/later testing
+                    if desiredJoint == id:
+                        Joint_x = smoothed_cx
+                        Joint_y = smoothed_cy
+
                 else:
                     # Draw a circle on the smoothed joint outside the bounding box in red
                     cv2.circle(img, (smoothed_cx, smoothed_cy), 5, (0, 0, 255), cv2.FILLED)
@@ -104,6 +126,9 @@ while True:
             # During calibration, store pabove values
             calibration_pabove_values.append(pabove)
             # Find average position of desired joint (within mask) 
+            if Joint_x != 0:
+                calibration_joint_values_x.append(Joint_x)
+                calibration_joint_values_y.append(Joint_y)
 
         ## Post Calibration functionality, this will all be done after the cal is over
 
@@ -111,13 +136,22 @@ while True:
             # After calibration, find the most common pabove value and store it
             most_common_pabove = Counter(calibration_pabove_values).most_common(1)[0][0]
             print(f"Most common pabove value during calibration: {most_common_pabove}")
+            # After calibration, find the average position of the desired joint
+            most_common_joint_x = np.mean(calibration_joint_values_x)
+            most_common_joint_y = np.mean(calibration_joint_values_y)
+            print(f"Most common joint value during calibration_x: {most_common_joint_x}")
+            print(f"Most common joint value during calibration_y: {most_common_joint_y}")
+            print(f"DesiredJoint id : {desiredJoint}")
             # Count reps (currently only allow one rep per cooldown period length)
             if time.time() - cooldown_start_time > cooldown_period:
                 if pabove > most_common_pabove:
                     reps += 1
                     cooldown_start_time = time.time()
-            # Check for movement
-            # ...
+                # Check for movement of our desired joint
+                if (Joint_x > most_common_joint_x + 50) or (Joint_x < most_common_joint_x - 50):
+                    errCounterX += 1
+                if (Joint_y > most_common_joint_y + 100) or (Joint_y < most_common_joint_y - 100):
+                    errCounterY += 1
 
 
     except Exception as e:
@@ -128,9 +162,10 @@ while True:
     fps = 1 / (cTime - pTime)
     pTime = cTime
 
-    cv2.putText(img, f"Points above mask: {pabove} Reps: {reps}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 3)
+    cv2.putText(img, f"Points above mask: {pabove} Reps: {reps} ErrorsX: {errCounterX} ErrorsY: {errCounterY}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 3)
     
+    resized_img = cv2.resize(img, (1300, 700))
     # Display the combined image with transparency
-    cv2.imshow("frame", img)
+    cv2.imshow("frame", resized_img)
 
     cv2.waitKey(1)
