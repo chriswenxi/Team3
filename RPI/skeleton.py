@@ -1,8 +1,10 @@
+import paho.mqtt.client as mqtt
 import cv2
 import mediapipe as mp
 import time
 import numpy as np
 from collections import Counter
+
 
 # Name functions for skeleton usage
 mpPose = mp.solutions.pose
@@ -35,8 +37,9 @@ errCounterX = 0
 errCounterY = 0
 
 # Cooldown start values for counting reps
-cooldown_period = 3  # Cooldown period (in seconds)
+cooldown_period = 2  # Cooldown period (in seconds)
 cooldown_start_time = time.time()
+cooldown_start_time_err = time.time()
 
 # Init lists to store desired joint positional values during calibration
 calibration_joint_values_x = []
@@ -46,6 +49,30 @@ calibration_joint_values_y = []
 desiredJoint = 0
 Joint_x = 0
 Joint_y = 0
+
+## MQTT functionality
+# MQTT callback functions
+
+def on_connect(client, userdata, flags, rc):
+   global flag_connected
+   flag_connected = 1
+   print("Connected to MQTT server")
+
+def on_disconnect(client, userdata, rc):
+   global flag_connected
+   flag_connected = 0
+   print("Disconnected from MQTT server")
+
+
+client = mqtt.Client("rpi_client_main") # this should be a unique name
+flag_connected = 0
+
+client.on_connect = on_connect
+client.on_disconnect = on_disconnect
+client.connect('127.0.0.1',1883)
+# start a new thread
+client.loop_start()
+print("......client setup complete............")
 
 # This is your actual processing code
 while True:
@@ -136,9 +163,15 @@ while True:
             # After calibration, find the most common pabove value and store it
             most_common_pabove = Counter(calibration_pabove_values).most_common(1)[0][0]
             print(f"Most common pabove value during calibration: {most_common_pabove}")
+
             # After calibration, find the average position of the desired joint
             most_common_joint_x = np.mean(calibration_joint_values_x)
             most_common_joint_y = np.mean(calibration_joint_values_y)
+            # Draw a box around my calibrated joint so I can visualize my movement threshold
+            box_x = int(most_common_joint_x - 50)
+            box_y = int(most_common_joint_y - 75)
+            cv2.rectangle(img, (box_x, box_y), (box_x + 100, box_y + 150), (255, 255, 255), 2)
+
             print(f"Most common joint value during calibration_x: {most_common_joint_x}")
             print(f"Most common joint value during calibration_y: {most_common_joint_y}")
             print(f"DesiredJoint id : {desiredJoint}")
@@ -147,11 +180,18 @@ while True:
                 if pabove > most_common_pabove:
                     reps += 1
                     cooldown_start_time = time.time()
+            if time.time() - cooldown_start_time_err > cooldown_period:
                 # Check for movement of our desired joint
                 if (Joint_x > most_common_joint_x + 50) or (Joint_x < most_common_joint_x - 50):
                     errCounterX += 1
-                if (Joint_y > most_common_joint_y + 100) or (Joint_y < most_common_joint_y - 100):
+                    data_to_publish = "Error from X position"
+                    client.publish("TurnerOpenCV", data_to_publish)
+                    cooldown_start_time_err = time.time()
+                if (Joint_y > most_common_joint_y + 75) or (Joint_y < most_common_joint_y - 75):
                     errCounterY += 1
+                    data_to_publish = "Error from Y position"
+                    client.publish("TurnerOpenCV", data_to_publish)
+                    cooldown_start_time_err = time.time()
 
 
     except Exception as e:

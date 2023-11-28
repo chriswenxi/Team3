@@ -16,9 +16,8 @@ def on_disconnect(client, userdata, rc):
 def callback_esp32_sensor1(client, userdata, msg):
     print('ESP sensor1 data: ', msg.payload.decode('utf-8'))
 
-
-def callback_esp32_sensor2(client, userdata, msg):
-    print('ESP sensor2 data: ', str(msg.payload.decode('utf-8')))
+def Opencv(client, userdata, msg):
+    print('OpenCV message: ', str(msg.payload.decode('utf-8')))
 
 def callback_rpi_broadcast(client, userdata, msg):
     print('RPi Broadcast message:  ', str(msg.payload.decode('utf-8')))
@@ -33,7 +32,7 @@ flag_connected = 0
 client.on_connect = on_connect
 client.on_disconnect = on_disconnect
 client.message_callback_add('esp32/sensor1', callback_esp32_sensor1)
-client.message_callback_add('esp32/sensor2', callback_esp32_sensor2)
+client.message_callback_add('TurnerOpenCV', Opencv)
 client.message_callback_add('rpi/broadcast', callback_rpi_broadcast)
 client.connect('127.0.0.1',1883)
 # start a new thread
