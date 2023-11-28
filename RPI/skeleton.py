@@ -64,12 +64,12 @@ def on_disconnect(client, userdata, rc):
    print("Disconnected from MQTT server")
 
 
-client = mqtt.Client("rpi_client_main") # this should be a unique name
+client = mqtt.Client("openCV client") # this should be a unique name
 flag_connected = 0
 
 client.on_connect = on_connect
 client.on_disconnect = on_disconnect
-client.connect('127.0.0.1',1883)
+client.connect('192.168.99.113',1883)
 # start a new thread
 client.loop_start()
 print("......client setup complete............")
