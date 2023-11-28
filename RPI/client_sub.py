@@ -24,6 +24,7 @@ def callback_rpi_broadcast(client, userdata, msg):
 
 def client_subscriptions(client):
     client.subscribe("esp32/#")
+    client.subscribe("TurnerOpenCV")
     client.subscribe("rpi/broadcast")
 
 client = mqtt.Client("rpi_client_main") #this should be a unique name
