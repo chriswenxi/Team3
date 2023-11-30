@@ -2,9 +2,35 @@ import paho.mqtt.client as mqtt
 import cv2
 import mediapipe as mp
 import time
+from time import sleep
 import numpy as np
 from collections import Counter
+import speech_recognition as sr  # Added import for speech recognition
 
+# Function to listen for a start command using speech recognition
+def listen_for_start_command():
+    recognizer = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Say 'start' to begin the program.")
+        audio = recognizer.listen(source)
+    try:
+        command = recognizer.recognize_google(audio).lower()
+        if "start" in command:
+            print("Start command recognized. Starting the program.")
+            return True
+        else:
+            print("Start command not recognized. Please say 'start' to begin.")
+            return False
+    except sr.UnknownValueError:
+        print("Could not understand audio. Please try again.")
+        return False
+    except sr.RequestError as e:
+        print(f"Could not request results from Google Speech Recognition service; {e}")
+        return False
+
+# Check for the start command
+if not listen_for_start_command():
+    exit()
 
 # Name functions for skeleton usage
 mpPose = mp.solutions.pose
@@ -76,6 +102,10 @@ print("......client setup complete............")
 
 # This is your actual processing code
 while True:
+    if reps >= 10:
+        client.publish("TurnerOpenCV", "Workout Complete!")
+        sleep(2)
+        break
     # Reset pabove for every frame
     pabove = 0
     

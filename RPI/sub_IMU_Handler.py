@@ -5,6 +5,11 @@ calibration_duration = 50  # 10 messages per second * 5 seconds
 calibration_data = []
 baseline_data = []
 
+# Error count variables
+errorCount = 0
+OpenCV_err_Flag = False
+error_time = time.time()
+
 def on_connect(client, userdata, flags, rc):
     global flag_connected
     flag_connected = 1
@@ -17,7 +22,7 @@ def on_disconnect(client, userdata, rc):
     print("Disconnected from MQTT server")
 
 def callback_esp32_sensor1(client, userdata, msg):
-    global calibration_data, baseline_data
+    global calibration_data, baseline_data, errorCount
 
     print('ESP sensor1 data: ', msg.payload.decode('utf-8'))
 
@@ -31,7 +36,8 @@ def callback_esp32_sensor1(client, userdata, msg):
             # Set the initial baseline as the average of the calibration values
             baseline_data = [sum(val) / len(val) for val in zip(*calibration_data)]
         if is_movement_detected(current_data, baseline_data):
-            print("Movement detected!")
+            print("True error detected!")
+            errorCount += 1
             # Update baseline when movement is detected
             baseline_data = current_data
 
@@ -42,6 +48,7 @@ def parse_imu_data(data_str):
     return [float(val) for val in data_str.split(',')]
 
 def is_movement_detected(current_data, baseline_data):
+    global OpenCV_err_Flag
     # Compare current data with baseline data to detect movement
     # Replace this with your actual movement detection logic
     # Example: Calculate the absolute difference between each corresponding value
@@ -49,10 +56,29 @@ def is_movement_detected(current_data, baseline_data):
         sum(abs(curr - baseline) for curr, baseline in zip(current_data, baseline_data)) / len(current_data)
     ]
     threshold = 10  # Adjust this threshold based on your specific use case
-    return any(avg_diff > threshold for avg_diff in average_differences)
+    if any(avg_diff > threshold for avg_diff in average_differences):
+        if time.time() - error_time < 1:
+            OpenCV_err_Flag = False
+            return True
+        else:
+            return False
 
 def Opencv(client, userdata, msg):
-    print('OpenCV message: ', str(msg.payload.decode('utf-8')))
+    global errorCount, error_time, OpenCV_err_Flag
+    converted_msg = str(msg.payload.decode('utf-8'))
+    print('OpenCV message: ', converted_msg)
+    if converted_msg == "Workout Complete!":
+        print("-------------------------------------------------------------\n")
+        print("-------------------------------------------------------------\n")
+        print("Workout Complete!\nTrue errors after 10 reps: ", errorCount)
+        print("-------------------------------------------------------------\n")
+        print("-------------------------------------------------------------\n")
+        exit()
+    if (converted_msg == "Error from X position") or (converted_msg == "Error from Y position"):
+        error_time = time.time()
+        OpenCV_err_Flag = True
+
+
 
 def callback_rpi_broadcast(client, userdata, msg):
     print('RPi Broadcast message:  ', str(msg.payload.decode('utf-8')))
