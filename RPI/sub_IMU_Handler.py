@@ -10,6 +10,9 @@ errorCount = 0
 OpenCV_err_Flag = False
 error_time = time.time()
 
+rpi_Process = False
+stopFlag = False
+
 def on_connect(client, userdata, flags, rc):
     global flag_connected
     flag_connected = 1
@@ -23,6 +26,9 @@ def on_disconnect(client, userdata, rc):
 
 def callback_esp32_sensor1(client, userdata, msg):
     global calibration_data, baseline_data, errorCount
+    if not rpi_Process:
+        # If continue_processing is False, return early without processing
+        return
 
     print('ESP sensor1 data: ', msg.payload.decode('utf-8'))
 
@@ -64,16 +70,18 @@ def is_movement_detected(current_data, baseline_data):
             return False
 
 def Opencv(client, userdata, msg):
-    global errorCount, error_time, OpenCV_err_Flag
+    global errorCount, error_time, OpenCV_err_Flag, rpi_Process, stopFlag
     converted_msg = str(msg.payload.decode('utf-8'))
     print('OpenCV message: ', converted_msg)
+    if converted_msg == "Start":
+        rpi_Process = True
     if converted_msg == "Workout Complete!":
         print("-------------------------------------------------------------\n")
         print("-------------------------------------------------------------\n")
         print("Workout Complete!\nTrue errors after 10 reps: ", errorCount)
         print("-------------------------------------------------------------\n")
         print("-------------------------------------------------------------\n")
-        exit()
+        stopFlag = True
     if (converted_msg == "Error from X position") or (converted_msg == "Error from Y position"):
         error_time = time.time()
         OpenCV_err_Flag = True
@@ -102,7 +110,7 @@ client.loop_start()
 client_subscriptions(client)
 print("......client setup complete............")
 
-while True:
+while not stopFlag:
     time.sleep(4)
     if flag_connected != 1:
         print("trying to connect MQTT server..")

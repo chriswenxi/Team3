@@ -7,30 +7,6 @@ import numpy as np
 from collections import Counter
 import speech_recognition as sr  # Added import for speech recognition
 
-# Function to listen for a start command using speech recognition
-def listen_for_start_command():
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        print("Say 'start' to begin the program.")
-        audio = recognizer.listen(source)
-    try:
-        command = recognizer.recognize_google(audio).lower()
-        if "start" in command:
-            print("Start command recognized. Starting the program.")
-            return True
-        else:
-            print("Start command not recognized. Please say 'start' to begin.")
-            return False
-    except sr.UnknownValueError:
-        print("Could not understand audio. Please try again.")
-        return False
-    except sr.RequestError as e:
-        print(f"Could not request results from Google Speech Recognition service; {e}")
-        return False
-
-# Check for the start command
-if not listen_for_start_command():
-    exit()
 
 # Name functions for skeleton usage
 mpPose = mp.solutions.pose
@@ -53,8 +29,6 @@ calibration_pabove_values = []
 # Calibration period (in seconds)
 calibration_period = 5  # Adjust as needed
 
-calibration_start_time = time.time()
-
 # Rep counter 
 reps = 0
 
@@ -64,8 +38,6 @@ errCounterY = 0
 
 # Cooldown start values for counting reps
 cooldown_period = 2  # Cooldown period (in seconds)
-cooldown_start_time = time.time()
-cooldown_start_time_err = time.time()
 
 # Init lists to store desired joint positional values during calibration
 calibration_joint_values_x = []
@@ -99,6 +71,39 @@ client.connect('192.168.99.113',1883)
 # start a new thread
 client.loop_start()
 print("......client setup complete............")
+
+# Function to listen for a start command using speech recognition
+def listen_for_start_command():
+    recognizer = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Say 'start' to begin the program.")
+        audio = recognizer.listen(source)
+    try:
+        command = recognizer.recognize_google(audio).lower()
+        if "start" in command:
+            print("Start command recognized. Starting the program.")
+            client.publish("TurnerOpenCV", "Start")
+            return True
+        else:
+            print("Start command not recognized. Please say 'start' to begin.")
+            return False
+    except sr.UnknownValueError:
+        print("Could not understand audio. Please try again.")
+        return False
+    except sr.RequestError as e:
+        print(f"Could not request results from Google Speech Recognition service; {e}")
+        return False
+
+# Check for the start command
+if not listen_for_start_command():
+    exit()
+
+
+# Set all time relevant values after we recieve the start command so that these dont begin at the wrong time and mess everything up
+cooldown_start_time = time.time()
+cooldown_start_time_err = time.time()
+calibration_start_time = time.time()
+
 
 # This is your actual processing code
 while True:
