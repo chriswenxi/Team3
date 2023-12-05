@@ -9,6 +9,7 @@ baseline_data = []
 errorCount = 0
 OpenCV_err_Flag = False
 error_time = time.time()
+true_error_time = time.time()
 
 rpi_Process = False
 stopFlag = False
@@ -27,7 +28,7 @@ def on_disconnect(client, userdata, rc):
 def callback_esp32_sensor1(client, userdata, msg):
     global calibration_data, baseline_data, errorCount
     if not rpi_Process:
-        # If continue_processing is False, return early without processing
+        # If processing flag is False, return early without processing
         return
 
     print('ESP sensor1 data: ', msg.payload.decode('utf-8'))
@@ -42,10 +43,11 @@ def callback_esp32_sensor1(client, userdata, msg):
             # Set the initial baseline as the average of the calibration values
             baseline_data = [sum(val) / len(val) for val in zip(*calibration_data)]
         if is_movement_detected(current_data, baseline_data):
-            print("True error detected!")
-            errorCount += 1
-            # Update baseline when movement is detected
-            baseline_data = current_data
+            if time.time() - true_error_time > 2:
+                print("True error detected!")
+                errorCount += 1
+                # Update baseline when movement is detected
+                baseline_data = current_data
 
 def parse_imu_data(data_str):
     # Parse IMU data from string to a suitable data structure
