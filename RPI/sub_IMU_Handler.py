@@ -26,7 +26,7 @@ def on_disconnect(client, userdata, rc):
     print("Disconnected from MQTT server")
 
 def callback_esp32_sensor1(client, userdata, msg):
-    global calibration_data, baseline_data, errorCount
+    global calibration_data, baseline_data, errorCount, true_error_time
     if not rpi_Process:
         # If processing flag is False, return early without processing
         return
@@ -46,6 +46,7 @@ def callback_esp32_sensor1(client, userdata, msg):
             if time.time() - true_error_time > 2:
                 print("True error detected!")
                 errorCount += 1
+                true_error_time = time.time()
                 # Update baseline when movement is detected
                 baseline_data = current_data
 
