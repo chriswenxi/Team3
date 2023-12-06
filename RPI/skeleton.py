@@ -14,7 +14,7 @@ pose = mpPose.Pose()
 mpDraw = mp.solutions.drawing_utils
 
 # Get video directly from camera
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 pTime = 0
 
 # Initialize empty list to store previous joint positions
@@ -37,7 +37,7 @@ errCounterX = 0
 errCounterY = 0
 
 # Cooldown start values for counting reps
-cooldown_period = 2  # Cooldown period (in seconds)
+cooldown_period = 4  # Cooldown period (in seconds)
 
 # Init lists to store desired joint positional values during calibration
 calibration_joint_values_x = []
@@ -68,6 +68,7 @@ flag_connected = 0
 client.on_connect = on_connect
 client.on_disconnect = on_disconnect
 client.connect('192.168.99.113',1883)
+#client.connect('131.179.39.148',1883)
 # start a new thread
 client.loop_start()
 print("......client setup complete............")
@@ -104,13 +105,16 @@ cooldown_start_time = time.time()
 cooldown_start_time_err = time.time()
 calibration_start_time = time.time()
 
-
+breakflag = False
+counter = 0
 # This is your actual processing code
 while True:
-    if reps >= 10:
+    if counter >= 30:
         client.publish("TurnerOpenCV", "Workout Complete!")
-        sleep(2)
+        sleep(1)
         break
+    if reps >= 10 and counter == 0:
+        breakflag = True
     # Reset pabove for every frame
     pabove = 0
     
@@ -244,3 +248,5 @@ while True:
     cv2.imshow("frame", resized_img)
 
     cv2.waitKey(1)
+    if breakflag:
+        counter += 1
