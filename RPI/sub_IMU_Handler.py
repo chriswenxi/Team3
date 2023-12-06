@@ -64,7 +64,7 @@ def is_movement_detected(current_data, baseline_data):
     average_differences = [
         sum(abs(curr - baseline) for curr, baseline in zip(current_data, baseline_data)) / len(current_data)
     ]
-    threshold = 10  # Adjust this threshold based on your specific use case
+    threshold = 5  # Adjust this threshold based on your specific use case
     if any(avg_diff > threshold for avg_diff in average_differences):
         if time.time() - error_time < 1:
             OpenCV_err_Flag = False
@@ -85,6 +85,7 @@ def Opencv(client, userdata, msg):
         print("-------------------------------------------------------------\n")
         print("-------------------------------------------------------------\n")
         stopFlag = True
+        client.disconnect()
     if (converted_msg == "Error from X position") or (converted_msg == "Error from Y position"):
         error_time = time.time()
         OpenCV_err_Flag = True
