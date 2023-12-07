@@ -1,6 +1,31 @@
 # Team3
 
-To have MQTT working on rpi, you must install the correct packages into your environment
+Guide:
+
+**ESP32-IMU**
+
+This folder holds the entire necessary code base to have an esp32 successfully reading off of the berryIMU, as well as the implementation for the MQTT service.
+
+The arduino-BerryIMU.ino is what actually gets uploaded to the esp32 through the arduino IDE. This code was edited heavily to allow for functionality on the ESP32, as it was originally deisgned for something heavier duty like an arduino uno board.
+
+
+**Laptop**
+
+This folder holds the code running from your laptop. As of right now this is only the skeleton code.
+
+**RPI**
+
+This folder holds things necessary for your RPI. 
+
+The sub_IMU_handler.py is the main script for this folder. The client_sub_csv.py is a simple script that allows you to send the recieved data into a CSV file conviently to analyze some data if necessary.
+
+The data folder holds a few csvs for the type of data we recieve from the IMU.
+
+The mosquitto.conf file is a configuration file for the MQTT broker on the RPI, this can just be moved into /etc/mosquitto/ and replace the standard config file.
+
+Some other instructions for having the mosquitto broker running is listed below.
+
+To have MQTT broker working on rpi, you must install the correct packages into your environment
 
 `sudo apt install mosquitto`
 
