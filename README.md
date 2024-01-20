@@ -8,6 +8,11 @@ This folder holds the entire necessary code base to have an esp32 successfully r
 
 The arduino-BerryIMU.ino is what actually gets uploaded to the esp32 through the arduino IDE. This code was edited heavily to allow for functionality on the ESP32, as it was originally deisgned for something heavier duty like an arduino uno board.
 
+If you are using our PCB, you must change the imu.cpp file. Please comment out the core of the detectIMU() function. The only thing you should leave in this function are the below two lines.
+
+`BerryIMUversion = 3;`
+
+`delay(1000);`
 
 **Laptop**
 
