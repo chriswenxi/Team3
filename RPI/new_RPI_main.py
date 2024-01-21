@@ -1,3 +1,4 @@
+from email.mime import base
 import paho.mqtt.client as mqtt
 import time
 
@@ -14,6 +15,7 @@ true_error_time = time.time()
 # Flags for starting up processes
 rpi_Process = False
 stopFlag = False
+pushup_Pause = False
 
 ## Define Functions
 
@@ -39,7 +41,7 @@ def client_subscriptions(client):
     client.subscribe("TurnerOpenCV")
     client.subscribe("Control")
 
-def is_movement_detected(current_data, baseline_data):
+def is_movement_detected_bicep(current_data, baseline_data):
     global OpenCV_err_Flag
     # Compare current data with baseline data to detect movement
     average_differences = [
@@ -53,6 +55,20 @@ def is_movement_detected(current_data, baseline_data):
         else:
             return False
 
+# Created a seperate one of these in case I need to change error timing for detection
+def is_movement_detected_pushup(current_data, baseline_data):
+    global pushup_Pause
+    # Compare current data with baseline data to detect movement
+    average_differences = [
+        sum(abs(curr - baseline) for curr, baseline in zip(current_data, baseline_data)) / len(current_data)
+    ]
+    threshold = 5 
+    if any(avg_diff > threshold for avg_diff in average_differences):
+        if time.time() - error_time < 1:
+            pushup_Pause = False
+            return True
+        else:
+            return False
 ## Callback Functions
 
 # Callback to handle the esp32 data for the bicepcurl specifically
@@ -73,7 +89,7 @@ def callback_esp32_bicepCurl(client, userdata, msg):
         if not baseline_data:
             # Set the initial baseline as the average of the calibration values
             baseline_data = [sum(val) / len(val) for val in zip(*calibration_data)]
-        if is_movement_detected(current_data, baseline_data):
+        if is_movement_detected_bicep(current_data, baseline_data):
             if time.time() - true_error_time > 2:
                 print("True error detected!")
                 errorCount += 1
@@ -92,10 +108,35 @@ def callback_OpenCV_bicepCurl(client, userdata, msg):
 
 def callback_esp32_Pushup(client, userdata, msg):
     # TO DO: add implementation
-    pass
+    # look for movement of IMU
+    # desired is no movement
+    global baseline_data, errorCount, true_error_time
+    current_data = parse_imu_data(msg.payload.decode('utf-8'))
+    print('ESP sensor1 data: ', msg.payload.decode('utf-8'))
+    # No calibration needed for pushup IMU so just set the baseline data to current for the moment
+    if len(baseline_data) == 0:
+        baseline_data = current_data
+    # Check for movement
+    if is_movement_detected_pushup(current_data, baseline_data):
+        # If there is movement, we are supposed to be in pushup pause, and there hasnt been another error
+        # in past 2 seconds then add another error
+        if (pushup_Pause == True) and (time.time() - true_error_time > 2):
+            print("True error detected!")
+            errorCount += 1
+            true_error_time = time.time()
+            # Update baseline when movement is detected
+            baseline_data = current_data
+
 def callback_OpenCV_Pushup(client, userdata, msg):
     # TO DO: add implementation
-    pass
+    # When we recieve the notification that the bottom of the pushup is reached
+    # Ask esp32 callback to look for no movement for one second
+    global pushup_Pause, error_time
+    converted_msg = str(msg.payload.decode('utf-8'))
+    print('OpenCV message: ', converted_msg)
+    if converted_msg == "pushup pause begin":
+        error_time = time.time()
+        pushup_Pause = True
 
 # This is the main function that determines the start/stop to sync data
 # As well as determining which exercise the program is currently handling

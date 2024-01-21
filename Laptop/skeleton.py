@@ -41,6 +41,8 @@ calibration_joint_values_y = []
 desiredJoint = 0
 Joint_x = 0
 Joint_y = 0
+Shoulder_x = 0
+Shoulder_y = 0
 
 ## MQTT functionality
 # MQTT callback functions
@@ -60,10 +62,10 @@ flag_connected = 0
 
 client.on_connect = on_connect
 client.on_disconnect = on_disconnect
-# client.connect('192.168.99.113',1883)
+client.connect('192.168.99.113',1883)
 #client.connect('131.179.39.148',1883)
 # start a new thread
-# client.loop_start()
+client.loop_start()
 print("......client setup complete............")
 
 ## Speech Recognition
@@ -360,8 +362,11 @@ if( exercise_flag == 2):
                         if desiredJoint == id:
                             Joint_x = smoothed_cx
                             Joint_y = smoothed_cy
-
+            
                     else:
+                        if id == 12:
+                            Shoulder_x = smoothed_cx
+                            Shoulder_y = smoothed_cy
                         # Draw a circle on the smoothed joint outside the bounding box in red
                         cv2.circle(img, (smoothed_cx, smoothed_cy), 5, (0, 0, 255), cv2.FILLED)
                         
@@ -395,7 +400,8 @@ if( exercise_flag == 2):
                 # can also just handle the pause notification here, when rep get counted, aka when you've
                 # hit the bottom of the rep, notify the IMU the rep has started and look for no movement for 1 second
                 if time.time() - cooldown_start_time > 4: # only one rep per 4 seconds
-                    if True: # check if shoulder joint passes line
+                    if Shoulder_y > int(most_common_joint_y): # check if shoulder joint passes line
+                        client.publish("TurnerOpenCV", "pushup pause begin")
                         reps += 1
                         cooldown_start_time = time.time()
 
