@@ -62,9 +62,9 @@ def is_movement_detected_pushup(current_data, baseline_data):
     average_differences = [
         sum(abs(curr - baseline) for curr, baseline in zip(current_data, baseline_data)) / len(current_data)
     ]
-    threshold = 5 
+    threshold = 40 
     if any(avg_diff > threshold for avg_diff in average_differences):
-        if time.time() - error_time < 1:
+        if (time.time() - error_time < 1.5) and (time.time() - error_time > 0.5):
             pushup_Pause = False
             return True
         else:
@@ -117,15 +117,17 @@ def callback_esp32_Pushup(client, userdata, msg):
     if len(baseline_data) == 0:
         baseline_data = current_data
     # Check for movement
-    if is_movement_detected_pushup(current_data, baseline_data):
-        # If there is movement, we are supposed to be in pushup pause, and there hasnt been another error
-        # in past 2 seconds then add another error
-        if (pushup_Pause == True) and (time.time() - true_error_time > 2):
-            print("True error detected!")
-            errorCount += 1
-            true_error_time = time.time()
-            # Update baseline when movement is detected
+    if pushup_Pause == True:
+        if is_movement_detected_pushup(current_data, baseline_data):
+            # If there is movement, we are supposed to be in pushup pause, and there hasnt been another error
+            # in past 2 seconds then add another error
+            print("Movement detected")
             baseline_data = current_data
+            if time.time() - true_error_time > 2:
+                print("True error detected!")
+                errorCount += 1
+                true_error_time = time.time()
+                # Update baseline when movement is detected
 
 def callback_OpenCV_Pushup(client, userdata, msg):
     # TO DO: add implementation
