@@ -1,12 +1,14 @@
 from email.mime import base
 import paho.mqtt.client as mqtt
 import time
+import threading
 
 ## Define Variables
 
 calibration_duration = 50  # 10 messages per second * 5 seconds
 calibration_data = []
 baseline_data = []
+pushup_baseline = 0
 # Error count variables
 errorCount = 0
 OpenCV_err_Flag = False
@@ -59,11 +61,9 @@ def is_movement_detected_bicep(current_data, baseline_data):
 def is_movement_detected_pushup(current_data, baseline_data):
     global pushup_Pause
     # Compare current data with baseline data to detect movement
-    average_differences = [
-        sum(abs(curr - baseline) for curr, baseline in zip(current_data, baseline_data)) / len(current_data)
-    ]
-    threshold = 40 
-    if any(avg_diff > threshold for avg_diff in average_differences):
+    average_differences = abs(current_data - baseline_data)
+    threshold = 15 
+    if (average_differences > threshold):
         if (time.time() - error_time < 1.5) and (time.time() - error_time > 0.5):
             pushup_Pause = False
             return True
@@ -110,24 +110,25 @@ def callback_esp32_Pushup(client, userdata, msg):
     # TO DO: add implementation
     # look for movement of IMU
     # desired is no movement
-    global baseline_data, errorCount, true_error_time
+    global pushup_baseline, errorCount, true_error_time
     current_data = parse_imu_data(msg.payload.decode('utf-8'))
+    current_data = current_data[1]
     print('ESP sensor1 data: ', msg.payload.decode('utf-8'))
     # No calibration needed for pushup IMU so just set the baseline data to current for the moment
-    if len(baseline_data) == 0:
-        baseline_data = current_data
+    if pushup_baseline == 0:
+        pushup_baseline = current_data
     # Check for movement
     if pushup_Pause == True:
-        if is_movement_detected_pushup(current_data, baseline_data):
+        if is_movement_detected_pushup(current_data, pushup_baseline):
             # If there is movement, we are supposed to be in pushup pause, and there hasnt been another error
             # in past 2 seconds then add another error
             print("Movement detected")
-            baseline_data = current_data
             if time.time() - true_error_time > 2:
                 print("True error detected!")
                 errorCount += 1
                 true_error_time = time.time()
                 # Update baseline when movement is detected
+    pushup_baseline = current_data
 
 def callback_OpenCV_Pushup(client, userdata, msg):
     # TO DO: add implementation
