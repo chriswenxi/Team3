@@ -9,6 +9,8 @@ calibration_duration = 50  # 10 messages per second * 5 seconds
 calibration_data = []
 baseline_data = []
 pushup_baseline = 0
+squat_baseline = 0
+squat_initial = 0
 # Error count variables
 errorCount = 0
 OpenCV_err_Flag = False
@@ -18,6 +20,7 @@ true_error_time = time.time()
 rpi_Process = False
 stopFlag = False
 pushup_Pause = False
+squat_Pause = False
 
 ## Define Functions
 
@@ -69,6 +72,18 @@ def is_movement_detected_pushup(current_data, baseline_data):
             return True
         else:
             return False
+
+def is_movement_detected_squat(current_data, baseline_data):
+    global squat_Pause
+    # Compare current data with baseline data to detect movement
+    average_differences = abs(current_data - baseline_data)
+    threshold = 15 
+    if (average_differences > threshold):
+        if (time.time() - error_time < 1.5) and (time.time() - error_time > 0.5):
+            squat_Pause = False
+            return True
+        else:
+            return False
 ## Callback Functions
 
 # Callback to handle the esp32 data for the bicepcurl specifically
@@ -107,7 +122,6 @@ def callback_OpenCV_bicepCurl(client, userdata, msg):
         OpenCV_err_Flag = True
 
 def callback_esp32_Pushup(client, userdata, msg):
-    # TO DO: add implementation
     # look for movement of IMU
     # desired is no movement
     global pushup_baseline, errorCount, true_error_time
@@ -131,7 +145,6 @@ def callback_esp32_Pushup(client, userdata, msg):
     pushup_baseline = current_data
 
 def callback_OpenCV_Pushup(client, userdata, msg):
-    # TO DO: add implementation
     # When we recieve the notification that the bottom of the pushup is reached
     # Ask esp32 callback to look for no movement for one second
     global pushup_Pause, error_time
@@ -140,6 +153,40 @@ def callback_OpenCV_Pushup(client, userdata, msg):
     if converted_msg == "pushup pause begin":
         error_time = time.time()
         pushup_Pause = True
+
+def callback_esp32_Squat(client, userdata, msg):
+    # look for movement of IMU
+    # desired is no movement
+    global squat_baseline, squat_initial, errorCount, true_error_time
+    current_data = parse_imu_data(msg.payload.decode('utf-8'))
+    current_data = current_data[1]
+    print('ESP sensor1 data: ', msg.payload.decode('utf-8'))
+    # No calibration needed for pushup IMU so just set the baseline data to current for the moment
+    if squat_baseline == 0:
+        squat_baseline = current_data
+        squat_initial = current_data
+    # Check for movement
+    if pushup_Pause == True:
+        if is_movement_detected_squat(current_data, squat_baseline):
+            # If there is movement, we are supposed to be in pushup pause, and there hasnt been another error
+            # in past 2 seconds then add another error
+            print("Movement detected")
+            if time.time() - true_error_time > 2:
+                print("True error detected!")
+                errorCount += 1
+                true_error_time = time.time()
+                # Update baseline when movement is detected
+    squat_baseline = current_data
+
+def callback_OpenCV_Squat(client, userdata, msg):
+    # When we recieve the notification that the bottom of the pushup is reached
+    # Ask esp32 callback to look for no movement for one second
+    global squat_Pause, error_time
+    converted_msg = str(msg.payload.decode('utf-8'))
+    print('OpenCV message: ', converted_msg)
+    if converted_msg == "squat pause begin":
+        error_time = time.time()
+        squat_Pause = True
 
 # This is the main function that determines the start/stop to sync data
 # As well as determining which exercise the program is currently handling
@@ -153,6 +200,9 @@ def control_callback(client, userdata, msg):
     if converted_msg == "2":
         client.message_callback_add('esp32/sensor1', callback_esp32_Pushup)
         client.message_callback_add('TurnerOpenCV', callback_OpenCV_Pushup)
+    if converted_msg == "3":
+        client.message_callback_add('esp32/sensor1', callback_esp32_Squat)
+        client.message_callback_add('TurnerOpenCV', callback_OpenCV_Squat)
     if converted_msg == "Start":
         rpi_Process = True
     if converted_msg == "Workout Complete!":
