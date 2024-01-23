@@ -6,6 +6,7 @@ from time import sleep
 import numpy as np
 from collections import Counter
 import speech_recognition as sr  # Added import for speech recognition
+import math
 
 
 # Name functions for skeleton usage
@@ -78,7 +79,7 @@ def ask_Exercise():
     recognizer = sr.Recognizer()
     with sr.Microphone() as source:
         print("Please state your desired exercise.\n")
-        print("Options: Bicep curl, Pushup, Squat\n")
+        print("Options: Bicep curl, Pushup, Squat, Leg Raise\n")
         audio = recognizer.listen(source)
     try:
         command = recognizer.recognize_google(audio).lower()
@@ -97,6 +98,10 @@ def ask_Exercise():
         if "squat" in command:
             print("Squat chosen\n")
             exercise_flag = 3
+            return True
+        if "leg raise" in command:
+            print("Leg Raise chosen\n")
+            exercise_flag = 4
             return True
         else:
             print("The exercise you requested was: " + command)
@@ -122,6 +127,7 @@ def listen_for_start_command():
             client.publish("Control", "Start")
             return True
         else:
+            print(command)
             print("Start command not recognized. Please say 'start' to begin.")
             return False
     except sr.UnknownValueError:
@@ -138,8 +144,6 @@ while not ask_Exercise():
 # Ask for prompt to start the execerise program
 while not listen_for_start_command():
     pass
-
-
 
 
 ## Bicep Curl code
@@ -294,7 +298,6 @@ if(exercise_flag == 1):
         cv2.waitKey(1)
         if breakflag:
             counter += 1
-
 
 ## Pushup code
 if( exercise_flag == 2):
@@ -564,3 +567,118 @@ if( exercise_flag == 3):
         cv2.waitKey(1)
         if breakflag:
             counter += 1
+
+## Leg Raise code
+if( exercise_flag == 4):
+    blue = (255, 127, 0)
+    red = (50, 50, 255)
+    green = (127, 255, 0)
+    dark_blue = (127, 20, 0)
+    light_green = (127, 233, 100)
+    yellow = (0, 255, 255)
+    pink = (255, 0, 255)
+    # Set all time relevant values after we recieve the start command so that these dont begin at the wrong time and mess everything up
+    cooldown_start_time = time.time()
+    calibration_start_time = time.time()
+    # This is variables to stop processing
+    breakflag = False
+    counter = 0
+    # variables for the line
+    angle_deg = 15
+    angle_rad = math.radians(angle_deg)
+    line_len = 700
+    # This is your actual processing code
+    while True:
+        if counter >= 30:
+            client.publish("Control", "Workout Complete!")
+            sleep(1)
+            break
+        if reps >= 10 and counter == 0:
+            breakflag = True
+        
+        # Read frame
+        success, img = cap.read()
+
+        # rgb for skeleton
+        imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        results = pose.process(imgRGB)
+
+        # Clear previous joint positions for the new frame
+        current_joint_positions = []
+
+        # Following line is the original skeleton drawing, but we dont really need the connections drawn or the points due to later code
+    
+        lm = results.pose_landmarks
+        lmPose = mpPose.PoseLandmark
+        h, w, c = img.shape
+
+        # Right shoulder
+        r_shldr_x = int(lm.landmark[lmPose.RIGHT_SHOULDER].x * w)
+        r_shldr_y = int(lm.landmark[lmPose.RIGHT_SHOULDER].y * h)
+        # right ear
+        r_ear_x = int(lm.landmark[lmPose.RIGHT_EAR].x * w)
+        r_ear_y = int(lm.landmark[lmPose.RIGHT_EAR].y * h)
+        # right hip
+        r_hip_x = int(lm.landmark[lmPose.RIGHT_HIP].x * w)
+        r_hip_y = int(lm.landmark[lmPose.RIGHT_HIP].y * h)
+        # Right knee
+        r_knee_x = int(lm.landmark[lmPose.RIGHT_KNEE].x * w)
+        r_knee_y = int(lm.landmark[lmPose.RIGHT_KNEE].y * h)
+        
+        joints = [(r_shldr_x, r_shldr_y), (r_ear_x, r_ear_y), (r_hip_x, r_hip_y), (r_knee_x, r_knee_y)]
+        # Apply smoothing to the joint positions
+        for joint, (joint_x, joint_y) in enumerate(joints):
+            if len(prev_joint_positions) > 0:
+                smoothed_x = int(smoothing_factor * joint_x + (1 - smoothing_factor) * prev_joint_positions[joint][0])
+                smoothed_y = int(smoothing_factor * joint_y + (1 - smoothing_factor) * prev_joint_positions[joint][1])
+            else:
+                smoothed_x, smoothed_y = joint_x, joint_y
+            # Store the current smoothed joint positions
+            current_joint_positions.append((smoothed_x, smoothed_y))
+
+        
+        # set for the next frame
+        prev_joint_positions = current_joint_positions
+
+        cv2.circle(img, (r_shldr_x, r_shldr_y), 7, yellow, -1)
+        cv2.circle(img, (r_ear_x, r_ear_y), 7, yellow, -1)
+        cv2.circle(img, (r_hip_x, r_hip_y), 7, yellow, -1)
+        cv2.circle(img, (r_knee_x, r_knee_y), 7, yellow, -1)
+        
+        for joint_position in (current_joint_positions):
+            joint_x, joint_y = joint_position
+            cv2.circle(img, (joint_x, joint_y), 7, blue, -1)
+
+
+        # During calibration period
+        if (time.time() - calibration_start_time < 3):
+            if r_hip_x != 0:
+                calibration_joint_values_x.append(r_hip_x)
+                calibration_joint_values_y.append(r_hip_y)
+        # Not calibration period
+        else:
+            calibrated_hip_x = np.mean(calibration_joint_values_x)
+            calibrated_hip_y = np.mean(calibration_joint_values_y)
+            end_x = int(calibrated_hip_x + line_len * math.cos(angle_rad))
+            end_y = int(calibrated_hip_y - line_len * math.sin(angle_deg))
+            cv2.line(img, (int(calibrated_hip_x), int(calibrated_hip_y)), (end_x, end_y), red, 2)
+            y_line_at_point = calibrated_hip_y + int((r_knee_x - calibrated_hip_x) * math.tan(angle_rad))
+
+            # Count reps
+            if time.time() - cooldown_start_time > 4: # only one rep per 4 seconds
+                if r_knee_y < y_line_at_point:
+                    reps += 1
+                    cooldown_start_time = time.time()
+
+
+        # Display
+        resized_img = cv2.resize(img, (1300, 700))
+        cv2.imshow('MediaPipe Pose', resized_img)
+        if cv2.waitKey(5) & 0xFF == ord('q'):
+            break
+
+        if breakflag:
+            counter += 1
+
+cap.release()
+cv2.destroyAllWindows()
