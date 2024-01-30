@@ -79,7 +79,7 @@ def ask_Exercise():
     recognizer = sr.Recognizer()
     with sr.Microphone() as source:
         print("Please state your desired exercise.\n")
-        print("Options: Bicep curl, Pushup, Squat, Leg Raise\n")
+        print("Options: Bicep curl, Pushup, Squat, Leg Raise, Plank\n")
         audio = recognizer.listen(source)
     try:
         command = recognizer.recognize_google(audio).lower()
@@ -102,6 +102,10 @@ def ask_Exercise():
         if "leg raise" in command:
             print("Leg Raise chosen\n")
             exercise_flag = 4
+            return True
+        if "plank" in command:
+            print("Plank chosen\n")
+            exercise_flag = 5
             return True
         else:
             print("The exercise you requested was: " + command)
@@ -137,6 +141,11 @@ def listen_for_start_command():
         print(f"Could not request results from Google Speech Recognition service; {e}")
         return False
 
+# Calculate angle.
+def findAngle(x1, y1, x2, y2):
+    theta = math.acos((y2 - y1) * (-y1) / (math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2) * y1))
+    degree = int(180 / math.pi) * theta
+    return degree
 ## These will continualy prompt the user until they pass the prompts
 # Ask for excercise
 while not ask_Exercise():
@@ -679,6 +688,136 @@ if( exercise_flag == 4):
 
         if breakflag:
             counter += 1
+
+# plank code
+if( exercise_flag == 5):
+    blue = (255, 127, 0)
+    red = (50, 50, 255)
+    green = (127, 255, 0)
+    dark_blue = (127, 20, 0)
+    light_green = (127, 233, 100)
+    yellow = (0, 255, 255)
+    pink = (255, 0, 255)
+    good_frames = 0
+    good_time = 0
+    bad_frames = 0
+    fps = 0
+    
+    start_time = time.time()
+    # This is your actual processing code
+    while True:
+        if time.time() - start_time > 180:
+            break
+        
+        # Read frame
+        success, img = cap.read()
+
+        # rgb for skeleton
+        imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        results = pose.process(imgRGB)
+
+        if results.pose_landmarks is None:
+            continue  # Skip to the next iteration if no person is detected
+        # Clear previous joint positions for the new frame
+        current_joint_positions = []
+
+        # Following line is the original skeleton drawing, but we dont really need the connections drawn or the points due to later code
+    
+        lm = results.pose_landmarks
+        lmPose = mpPose.PoseLandmark
+        h, w, c = img.shape
+
+        # Right shoulder
+        r_shldr_x = int(lm.landmark[lmPose.RIGHT_SHOULDER].x * w)
+        r_shldr_y = int(lm.landmark[lmPose.RIGHT_SHOULDER].y * h)
+
+        # right hip
+        r_hip_x = int(lm.landmark[lmPose.RIGHT_HIP].x * w)
+        r_hip_y = int(lm.landmark[lmPose.RIGHT_HIP].y * h)
+        # Right knee
+        r_knee_x = int(lm.landmark[lmPose.RIGHT_KNEE].x * w)
+        r_knee_y = int(lm.landmark[lmPose.RIGHT_KNEE].y * h)
+        
+        joints = [(r_shldr_x, r_shldr_y), (r_hip_x, r_hip_y), (r_knee_x, r_knee_y)]
+        # Apply smoothing to the joint positions
+        for joint, (joint_x, joint_y) in enumerate(joints):
+            if len(prev_joint_positions) > 0:
+                smoothed_x = int(smoothing_factor * joint_x + (1 - smoothing_factor) * prev_joint_positions[joint][0])
+                smoothed_y = int(smoothing_factor * joint_y + (1 - smoothing_factor) * prev_joint_positions[joint][1])
+            else:
+                smoothed_x, smoothed_y = joint_x, joint_y
+            # Store the current smoothed joint positions
+            current_joint_positions.append((smoothed_x, smoothed_y))
+
+        
+        # set for the next frame
+        prev_joint_positions = current_joint_positions
+
+        cv2.circle(img, (r_shldr_x, r_shldr_y), 7, yellow, -1)
+        cv2.circle(img, (r_hip_x, r_hip_y), 7, yellow, -1)
+        cv2.circle(img, (r_knee_x, r_knee_y), 7, yellow, -1)
+        
+        for joint_position in (current_joint_positions):
+            joint_x, joint_y = joint_position
+            cv2.circle(img, (joint_x, joint_y), 7, blue, -1)
+
+
+        # calculate angles
+        
+        knee_inclination = findAngle(r_knee_x, r_knee_y, r_hip_x, r_hip_y)
+        torso_inclination = findAngle(r_hip_x, r_hip_y, r_shldr_x, r_shldr_y)
+        # Put text, Posture and angle inclination.
+        # Text string for display.
+        angle_text_string = 'Knee : ' + str(int(knee_inclination)) + '  Torso : ' + str(int(torso_inclination))
+
+        # calculate diff
+        angle_diff = np.abs(knee_inclination - torso_inclination)
+        # Determine whether good posture or bad posture.
+        # The threshold angles have been set based on intuition.
+        if angle_diff < 5:
+            good_frames += 1
+            
+            cv2.putText(img, angle_text_string, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, light_green, 2)
+            cv2.putText(img, str(int(knee_inclination)), (r_shldr_x + 10, r_shldr_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, light_green, 2)
+            cv2.putText(img, str(int(torso_inclination)), (r_hip_x + 10, r_hip_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, light_green, 2)
+
+            # Join landmarks.
+            cv2.line(img, (r_shldr_x, r_shldr_y), (r_hip_x, r_hip_y), green, 4)
+            cv2.line(img, (r_hip_x, r_hip_y), (r_knee_x, r_knee_y), green, 4)
+
+        else:
+            bad_frames += 1
+
+            cv2.putText(img, angle_text_string, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, light_green, 2)
+            cv2.putText(img, str(int(knee_inclination)), (r_shldr_x + 10, r_shldr_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, light_green, 2)
+            cv2.putText(img, str(int(torso_inclination)), (r_hip_x + 10, r_hip_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, light_green, 2)
+
+            # Join landmarks.
+            cv2.line(img, (r_shldr_x, r_shldr_y), (r_hip_x, r_hip_y), green, 4)
+            cv2.line(img, (r_hip_x, r_hip_y), (r_knee_x, r_knee_y), green, 4)
+
+        # Calculate the time of remaining in a particular posture.
+        if fps != 0:
+            good_time = (1 / fps) * good_frames
+            bad_time =  (1 / fps) * bad_frames
+
+        # Pose time.
+        if good_time > 0:
+            time_string_good = 'Proper Plank time : ' + str(round(good_time, 1)) + 's'
+            cv2.putText(img, time_string_good, (10, h-20), cv2.FONT_HERSHEY_SIMPLEX, 0.9, green, 2)
+            time_string_bad = 'Bad Plank Time : ' + str(round(bad_time, 1)) + 's'
+            cv2.putText(img, time_string_bad, (10, h - 50), cv2.FONT_HERSHEY_SIMPLEX,  0.9, red, 2)
+
+        # Display
+        resized_img = cv2.resize(img, (1300, 700))
+        cv2.imshow('MediaPipe Pose', resized_img)
+        if cv2.waitKey(5) & 0xFF == ord('q'):
+            break
+
+        cTime = time.time()
+        fps = 1 / (cTime - pTime)
+        pTime = cTime
+
 
 cap.release()
 cv2.destroyAllWindows()
