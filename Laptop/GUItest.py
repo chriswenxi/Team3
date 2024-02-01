@@ -9,7 +9,7 @@ app.title("OpenCV Video Feed")
 app.geometry("800x600")
 
 # opencv
-cap = cv2.VideoCapture(1) # my webcam is 1, may have to change to 0 depending
+cap = cv2.VideoCapture(0) # my webcam is 1, may have to change to 0 depending
 
 rep_count = 0
 error_count = 0
@@ -17,6 +17,7 @@ start_time = time.time()
 
 def update_frame():
     ret, frame = cap.read()
+    cv2.imshow('test',frame)
     if ret:
         # convert to image
         cv_img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
